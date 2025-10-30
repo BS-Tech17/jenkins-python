@@ -10,9 +10,9 @@ pipeline {
 
         stage('Setup Environment') {
             steps {
-                sh '''
+                bat '''
                 python -m venv venv
-                . venv/bin/activate
+                call venv\\Scripts\\activate
                 pip install -r requirements.txt
                 '''
             }
@@ -20,8 +20,8 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                sh '''
-                . venv/bin/activate
+                bat '''
+                call venv\\Scripts\\activate
                 pytest -v
                 '''
             }
@@ -29,19 +29,19 @@ pipeline {
 
         stage('Code Quality (Optional)') {
             steps {
-                sh '''
-                . venv/bin/activate
-                pylint app.py || true
+                bat '''
+                call venv\\Scripts\\activate
+                pylint app.py || exit 0
                 '''
             }
         }
 
         stage('Deploy') {
             steps {
-                sh '''
-                echo "Starting Flask app..."
-                . venv/bin/activate
-                nohup python app.py &
+                bat '''
+                echo Starting Flask app...
+                call venv\\Scripts\\activate
+                python app.py
                 '''
             }
         }
