@@ -4,46 +4,39 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
+                // Pull latest code from your Git repository
                 git branch: 'main', url: 'https://github.com/BS-Tech17/jenkins-python.git'
             }
         }
 
-        stage('Setup Environment') {
+        stage('Install Dependencies') {
             steps {
-                bat '''
-                python -m venv venv
-                call venv\\Scripts\\activate
+                // Install all required Python libraries
+                sh '''
+                echo "Installing Python dependencies..."
+                pip install --upgrade pip
                 pip install -r requirements.txt
                 '''
             }
         }
 
-        stage('Run Tests') {
+        stage('Run Script') {
             steps {
-                bat '''
-                call venv\\Scripts\\activate
-                pytest -v
+                // Run your main Python script
+                sh '''
+                echo "Running Python script..."
+                python main.py
                 '''
             }
         }
+    }
 
-        stage('Code Quality (Optional)') {
-            steps {
-                bat '''
-                call venv\\Scripts\\activate
-                pylint app.py || exit 0
-                '''
-            }
+    post {
+        success {
+            echo 'Build completed successfully!'
         }
-
-        stage('Deploy') {
-            steps {
-                bat '''
-                echo Starting Flask app...
-                call venv\\Scripts\\activate
-                python app.py
-                '''
-            }
+        failure {
+            echo 'Build failed. Check console output for details.'
         }
     }
 }
