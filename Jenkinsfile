@@ -3,8 +3,10 @@ pipeline {
 
     environment {
         PYTHON = 'python3'
+        VENV = 'venv'
         FLASK_HOST = '127.0.0.1'
         FLASK_PORT = '8081'
+        PATH = "${WORKSPACE}/venv/bin:${PATH}"
     }
 
     options {
@@ -13,7 +15,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scmGit(
@@ -26,8 +27,10 @@ pipeline {
         stage('Setup') {
             steps {
                 sh '''
-                $PYTHON -m pip install --upgrade pip
-                pip install -r requirements.txt --quiet
+                rm -rf $VENV
+                $PYTHON -m venv $VENV
+                venv/bin/pip install --upgrade pip
+                venv/bin/pip install -r requirements.txt
                 '''
             }
         }
@@ -36,7 +39,7 @@ pipeline {
             steps {
                 sh '''
                 mkdir -p reports
-                pytest tests/ \
+                venv/bin/pytest tests/ \
                     -q \
                     --junitxml=reports/junit.xml \
                     --cov=app \
@@ -46,7 +49,7 @@ pipeline {
             post {
                 always {
                     junit testResults: 'reports/junit.xml', allowEmptyResults: true
-                    recordCoverage(tools: [[parser: 'PYTHON', pattern: 'reports/coverage.xml']])
+                    recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'reports/coverage.xml']])
                 }
             }
         }
@@ -59,7 +62,7 @@ pipeline {
                 fuser -k $FLASK_PORT/tcp || true
 
                 echo "=== START FLASK ==="
-                nohup python3 app.py > flask.log 2>&1 &
+                nohup venv/bin/python app.py > flask.log 2>&1 &
 
                 sleep 4
 
