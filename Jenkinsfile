@@ -19,7 +19,7 @@ pipeline {
                 timeout(time: 30, unit: 'SECONDS') {
                     checkout scmGit(
                         branches: [[name: '*/main']],
-                        userRemoteConfigs: [[url: 'https://github.com/BS-Tech17/jenkins-python.git']],
+                        userRemoteConfigs: [[url: 'https://github.com/stardxst12/jenkins-python.git']],
                         extensions: [
                             [$class: 'CloneOption', shallow: true, depth: 1, noTags: true],
                             [$class: 'CleanCheckout']
@@ -49,7 +49,7 @@ pipeline {
                     sh '''
                     . $VENV/bin/activate
                     mkdir -p reports
-                    pytest test_app.py \
+                    pytest tests/ \
                         -q \
                         --junitxml=reports/junit.xml \
                         --cov=main \
