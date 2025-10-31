@@ -14,6 +14,7 @@ pipeline {
     }
 
     stages {
+        /* ---------------- CHECKOUT ---------------- */
         stage('Checkout') {
             steps {
                 timeout(time: 30, unit: 'SECONDS') {
@@ -29,6 +30,7 @@ pipeline {
             }
         }
 
+        /* ---------------- SETUP ---------------- */
         stage('Setup') {
             steps {
                 timeout(time: 90, unit: 'SECONDS') {
@@ -43,16 +45,18 @@ pipeline {
             }
         }
 
+        /* ---------------- TEST ---------------- */
         stage('Test') {
             steps {
                 timeout(time: 45, unit: 'SECONDS') {
                     sh '''
                     . $VENV/bin/activate
                     mkdir -p reports
+                    export PYTHONPATH=$PYTHONPATH:$(pwd)
                     pytest tests/ \
                         -q \
                         --junitxml=reports/junit.xml \
-                        --cov=main \
+                        --cov=app \
                         --cov-report=xml:reports/coverage.xml
                     '''
                 }
@@ -65,6 +69,7 @@ pipeline {
             }
         }
 
+        /* ---------------- DEPLOY ---------------- */
         stage('Deploy') {
             when { branch 'main' }
             steps {
@@ -76,7 +81,7 @@ pipeline {
                     fuser -k $FLASK_PORT/tcp || true
 
                     echo "=== START FLASK ==="
-                    nohup python3 main.py > flask.log 2>&1 &
+                    nohup python3 app.py > flask.log 2>&1 &
 
                     sleep 4
 
