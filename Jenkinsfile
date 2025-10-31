@@ -6,7 +6,6 @@ pipeline {
         VENV = 'venv'
         FLASK_HOST = '127.0.0.1'
         FLASK_PORT = '8081'
-        PATH = "${WORKSPACE}/venv/bin:${PATH}"
     }
 
     options {
@@ -29,8 +28,9 @@ pipeline {
                 sh '''
                 rm -rf $VENV
                 $PYTHON -m venv $VENV
-                venv/bin/pip install --upgrade pip
-                venv/bin/pip install -r requirements.txt
+                . $VENV/bin/activate
+                pip install --upgrade pip
+                pip install -r requirements.txt --quiet
                 '''
             }
         }
@@ -38,8 +38,9 @@ pipeline {
         stage('Test') {
             steps {
                 sh '''
+                . $VENV/bin/activate
                 mkdir -p reports
-                venv/bin/pytest tests/ \
+                pytest tests/ \
                     -q \
                     --junitxml=reports/junit.xml \
                     --cov=app \
@@ -49,20 +50,22 @@ pipeline {
             post {
                 always {
                     junit testResults: 'reports/junit.xml', allowEmptyResults: true
-                    recordCoverage(tools: [[parser: 'COBERTURA', pattern: 'reports/coverage.xml']])
+                    recordCoverage(tools: [[parser: 'PYTHON', pattern: 'reports/coverage.xml']])
                 }
             }
         }
 
         stage('Deploy') {
-            when { branch 'main' }
+            // when { branch 'main' }  <-- commented for demo (so Deploy always runs)
             steps {
                 sh '''
+                . $VENV/bin/activate
+
                 echo "=== KILL PORT $FLASK_PORT ==="
                 fuser -k $FLASK_PORT/tcp || true
 
                 echo "=== START FLASK ==="
-                nohup venv/bin/python app.py > flask.log 2>&1 &
+                nohup python3 app.py > flask.log 2>&1 &
 
                 sleep 4
 
