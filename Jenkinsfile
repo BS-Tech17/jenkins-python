@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        PYTHON = 'python'
-        VENV = 'venv'
-        FLASK_PORT = '8081'  // Same as Jenkins
-        FLASK_HOST = '127.0.0.1'
+        PYTHON      = 'python'          // use 'python3' if needed
+        VENV        = 'venv'
+        FLASK_HOST  = '127.0.0.1'
+        FLASK_PORT  = '8081'            // same port as Jenkins UI
     }
 
     options {
@@ -40,8 +40,9 @@ pipeline {
                 if exist %VENV% rmdir /s /q %VENV%
                 %PYTHON% -m venv %VENV%
                 call %VENV%\\Scripts\\activate
-                pip install --upgrade pip
+                python -m pip install --upgrade pip
                 pip install -r requirements.txt
+                pip list
                 '''
             }
         }
@@ -51,13 +52,18 @@ pipeline {
                 bat '''
                 call %VENV%\\Scripts\\activate
                 mkdir reports 2>nul
-                pytest test_app.py -v --junitxml=reports/junit.xml --cov=main --cov-report=xml:reports/coverage.xml
+                pytest test_app.py -v ^
+                    --junitxml=reports/junit.xml ^
+                    --cov=main ^
+                    --cov-report=xml:reports/coverage.xml ^
+                    --cov-report=html:reports/html-cov
                 '''
             }
             post {
                 always {
                     junit 'reports/junit.xml'
                     publishCoverage adapters: [cobertura('reports/coverage.xml')]
+                    archiveArtifacts artifacts: 'reports/html-cov/**', allowEmptyArchive: true
                 }
             }
         }
@@ -68,19 +74,21 @@ pipeline {
                 bat '''
                 call %VENV%\\Scripts\\activate
 
-                echo === STOPPING ANY PROCESS ON PORT %FLASK_PORT% ===
+                echo === KILL ANY PROCESS ON PORT %FLASK_PORT% ===
                 netstat -ano | findstr :%FLASK_PORT% > port_check.txt
                 if not errorlevel 1 (
-                    for /f "tokens=5" %%a in (port_check.txt) do taskkill /PID %%a /F
-                    echo Killed process on port %FLASK_PORT%
+                    for /f "tokens=5" %%a in (port_check.txt) do (
+                        taskkill /PID %%a /F
+                        echo Killed PID %%a
+                    )
                 ) else (
-                    echo No process found on port %FLASK_PORT%
+                    echo No process on port %FLASK_PORT%
                 )
 
-                echo === STARTING FLASK ON %FLASK_HOST%:%FLASK_PORT% ===
+                echo === START FLASK ON %FLASK_HOST%:%FLASK_PORT% ===
                 start "" /b python main.py
 
-                timeout /t 5 >nul
+                timeout /t 6 >nul
 
                 echo === HEALTH CHECK ===
                 curl -f http://%FLASK_HOST%:%FLASK_PORT%/health || exit 1
@@ -94,7 +102,8 @@ pipeline {
             }
             post {
                 always {
-                    archiveArtifacts '*.log,port_check.txt', allowEmptyArchive: true
+                    // Fixed: Named argument 'artifacts'
+                    archiveArtifacts artifacts: '*.log,port_check.txt', allowEmptyArchive: true
                 }
             }
         }
@@ -105,7 +114,7 @@ pipeline {
             echo "SUCCESS! Open http://localhost:8081"
         }
         failure {
-            echo "FAILED! Check logs."
+            echo "FAILED! Check logs above."
         }
         always {
             cleanWs()
