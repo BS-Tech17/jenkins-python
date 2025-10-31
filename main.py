@@ -1,4 +1,3 @@
-# main.py
 from flask import Flask, jsonify
 import os
 
