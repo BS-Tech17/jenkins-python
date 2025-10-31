@@ -2,10 +2,10 @@ pipeline {
     agent any
 
     environment {
-        PYTHON      = 'python'          // or 'python3'
+        PYTHON      = 'python3'
         VENV        = 'venv'
         FLASK_HOST  = '127.0.0.1'
-        FLASK_PORT  = '8081'            // same port you want
+        FLASK_PORT  = '8081'
     }
 
     options {
@@ -14,57 +14,45 @@ pipeline {
     }
 
     stages {
-        /* -------------------------------------------------
-           1. Checkout – shallow + 30‑second timeout
-           ------------------------------------------------- */
+        /* ---------- 1. Checkout ---------- */
         stage('Checkout') {
             steps {
-                timeout(time: 30, unit: 'SECONDS') {
-                    checkout scmGit(
-                        branches: [[name: '*/main']],
-                        userRemoteConfigs: [[url: 'https://github.com/BS-Tech17/jenkins-python.git']],
-                        extensions: [
-                            [$class: 'CloneOption', shallow: true, depth: 1, noTags: true],
-                            [$class: 'CleanCheckout']
-                        ]
-                    )
-                }
+                checkout scmGit(
+                    branches: [[name: '*/main']],
+                    userRemoteConfigs: [[url: 'https://github.com/BS-Tech17/jenkins-python.git']],
+                    extensions: [
+                        [$class: 'CloneOption', shallow: true, depth: 1, noTags: true],
+                        [$class: 'CleanCheckout']
+                    ]
+                )
             }
         }
 
-        /* -------------------------------------------------
-           2. Setup – venv + deps (cached pip)
-           ------------------------------------------------- */
+        /* ---------- 2. Setup ---------- */
         stage('Setup') {
             steps {
-                timeout(time: 90, unit: 'SECONDS') {
-                    bat '''
-                    if exist %VENV% rmdir /s /q %VENV%
-                    %PYTHON% -m venv %VENV%
-                    call %VENV%\\Scripts\\activate
-                    python -m pip install --upgrade pip
-                    pip install -r requirements.txt --quiet
-                    '''
-                }
+                sh '''
+                rm -rf $VENV
+                $PYTHON -m venv $VENV
+                source $VENV/bin/activate
+                python -m pip install --upgrade pip
+                pip install -r requirements.txt --quiet
+                '''
             }
         }
 
-        /* -------------------------------------------------
-           3. Test – JUnit + Cobertura only (no HTML)
-           ------------------------------------------------- */
+        /* ---------- 3. Test ---------- */
         stage('Test') {
             steps {
-                timeout(time: 45, unit: 'SECONDS') {
-                    bat '''
-                    call %VENV%\\Scripts\\activate
-                    mkdir reports 2>nul
-                    pytest test_app.py ^
-                        -q ^
-                        --junitxml=reports/junit.xml ^
-                        --cov=main ^
-                        --cov-report=xml:reports/coverage.xml
-                    '''
-                }
+                sh '''
+                source $VENV/bin/activate
+                mkdir -p reports
+                pytest test_app.py \
+                    -q \
+                    --junitxml=reports/junit.xml \
+                    --cov=main \
+                    --cov-report=xml:reports/coverage.xml
+                '''
             }
             post {
                 always {
@@ -74,37 +62,33 @@ pipeline {
             }
         }
 
-        /* -------------------------------------------------
-           4. Deploy – kill port → start Flask → quick health
-           ------------------------------------------------- */
+        /* ---------- 4. Deploy ---------- */
         stage('Deploy') {
             when { branch 'main' }
             steps {
-                timeout(time: 30, unit: 'SECONDS') {
-                    bat '''
-                    call %VENV%\\Scripts\\activate
+                sh '''
+                source $VENV/bin/activate
 
-                    echo === KILL PORT %FLASK_PORT% ===
-                    for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%FLASK_PORT%') do taskkill /PID %%a /F >nul 2>&1
+                echo "=== KILL PORT $FLASK_PORT ==="
+                fuser -k $FLASK_PORT/tcp || true
 
-                    echo === START FLASK ===
-                    start "" /b python main.py
+                echo "=== START FLASK ==="
+                nohup python main.py > flask.log 2>&1 &
 
-                    timeout /t 4 >nul
+                sleep 4
 
-                    echo === HEALTH CHECK ===
-                    curl -f http://%FLASK_HOST%:%FLASK_PORT%/health || exit 1
+                echo "=== HEALTH CHECK ==="
+                curl -f http://$FLASK_HOST:$FLASK_PORT/health || exit 1
 
-                    echo.
-                    echo ================================================
-                    echo    FLASK IS LIVE → http://localhost:8081
-                    echo ================================================
-                    '''
-                }
+                echo
+                echo "================================"
+                echo "FLASK IS LIVE → http://localhost:8081"
+                echo "================================"
+                '''
             }
             post {
                 always {
-                    archiveArtifacts artifacts: '*.log,port_check.txt', allowEmptyArchive: true
+                    archiveArtifacts artifacts: '*.log', allowEmptyArchive: true
                 }
             }
         }
