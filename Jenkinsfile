@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         PYTHON = 'python3'
-        VENV = 'venv'
         FLASK_HOST = '127.0.0.1'
         FLASK_PORT = '8081'
     }
@@ -14,6 +13,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scmGit(
@@ -26,10 +26,7 @@ pipeline {
         stage('Setup') {
             steps {
                 sh '''
-                rm -rf $VENV
-                $PYTHON -m venv $VENV
-                . $VENV/bin/activate
-                pip install --upgrade pip
+                $PYTHON -m pip install --upgrade pip
                 pip install -r requirements.txt --quiet
                 '''
             }
@@ -38,7 +35,6 @@ pipeline {
         stage('Test') {
             steps {
                 sh '''
-                . $VENV/bin/activate
                 mkdir -p reports
                 pytest tests/ \
                     -q \
@@ -50,7 +46,7 @@ pipeline {
             post {
                 always {
                     junit testResults: 'reports/junit.xml', allowEmptyResults: true
-                    recordCoverage(tools: [cobertura(pattern: 'reports/coverage.xml')])
+                    recordCoverage(tools: [[parser: 'PYTHON', pattern: 'reports/coverage.xml']])
                 }
             }
         }
@@ -59,8 +55,6 @@ pipeline {
             when { branch 'main' }
             steps {
                 sh '''
-                . $VENV/bin/activate
-
                 echo "=== KILL PORT $FLASK_PORT ==="
                 fuser -k $FLASK_PORT/tcp || true
 
@@ -86,8 +80,8 @@ pipeline {
     }
 
     post {
-        success { echo "✅ SUCCESS – http://localhost:8081" }
-        failure { echo "❌ FAILED – check console logs" }
+        success { echo "SUCCESS – http://localhost:8081" }
+        failure { echo "FAILED – check console logs" }
         always { cleanWs() }
     }
 }
